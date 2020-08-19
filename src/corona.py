@@ -39,5 +39,4 @@ def rate_changing_event(self, env, population):
 if __name__ == "__main__":
     env = simpy.Environment()
     pop_germany = Population(env, 80000000)
-
     pop_germany.run()
