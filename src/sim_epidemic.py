@@ -131,7 +131,7 @@ def sim_epidemic_sirxd(N, I, T, rates, time_step=1.0, adapt_birthrate=True):
     time = [0] + time
     sirxd_plot(time, S, I, R, Xs, Xi, Dn, Di, N)
 
-def sirxd_plot(time, S, I, R, Xs, Xi, Dn, Di, N, figure=1, last_figure=False):
+def sirxd_plot(time, S, I, R, Xs, Xi, Dn, Di, N, title=None, figure=1, last_figure=False):
     """Plots the given SIRXD model given by it's groups/classes"""
     plt.figure(figure)
     plt.plot(
@@ -144,6 +144,8 @@ def sirxd_plot(time, S, I, R, Xs, Xi, Dn, Di, N, figure=1, last_figure=False):
         time, Di,
         time, N
     )
+    if title: plt.title(f'Population: {title}')
+    plt.grid(True)
     plt.xlabel('Time')
     plt.ylabel('S,I,R,X,D')
     plt.xlim((0, time[-1]))# plt.xlim((0, T))

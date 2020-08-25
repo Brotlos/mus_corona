@@ -156,6 +156,9 @@ class Person(object):
         # self.in_quarantine = False
         # self.is_vaccinated = False
 
+        #Add self as process to environemnt
+        self.life_process = self.env.process(self.life())
+
     def __call__(self):
         return self.life()
 
@@ -325,6 +328,8 @@ def plot_results():
 
 if __name__ == "__main__":
 
+    # debugging=True
+
     # Create simulation environment
     env = simpy.Environment()
 
@@ -335,9 +340,12 @@ if __name__ == "__main__":
     # Create Person
     people = [Person(env) for i in range(num_people)]
 
-    # Add Person to simulation environment
-    for person in people:
-        person.life_process = person.env.process(person.life())
+    # i=1
+    # # Add Person to simulation environment
+    # for person in people:
+    #     print(i); i += 1
+
+    #     person.life_process = person.env.process(person.life())
 
     # initial infectious
     for person in choices(people, k=initial_num_infectious):

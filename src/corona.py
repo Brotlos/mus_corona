@@ -1,8 +1,10 @@
+from copy import deepcopy
 import simpy
+
 import sim_epidemic as model
 
 STEP = 1 #Stepwidth; interpreted as days. Adjust the rates of EpidemicParameters to this value
-END = 366 #Simulates this number of steps
+END = 175 #Simulates this number of steps
 
 class EpidemicParameters(object):
     '''Parameters for epidemic calculation with respect to SIRXD-model
@@ -26,7 +28,7 @@ class EpidemicParameters(object):
         Note:
             l/y corresponds to the duration of the infection
     '''
-    
+
     def __init__(self, v=0.0, μ=0.0, γ=0.0, κ=0.0, ωs=0.0, ωi=0.0, ωe=0.0, q=0.0, δ=0.0, β=None, λ=None):
         self.v = v 
         self.μ = μ 
@@ -39,7 +41,6 @@ class EpidemicParameters(object):
         self.δ = δ 
         self.β = β
         self.λ = λ
-
 
     def set_parameters_from_event(self, event):
         '''Set the parameters based on the given Event'''
@@ -87,12 +88,15 @@ class EpidemicEvent(object):
             env = population.env
             return eval(self.condition)
         except:
+            print(f'Condition {self.condition} could not be evaluated')
             return False
+    
     def execute(self, population):
+        print(f'Event: {self.name} is executing at time: {population.env.now}')
         population.params.set_parameters_from_event(self)
         if self.callback:
             self.callback(self, population)
-        alive = self._keep_alive
+        self.alive = self._keep_alive
 
 class Population (object):
     ''' Represents a population with class division according to the SIRXD model
@@ -128,10 +132,11 @@ class Population (object):
         #set SimPy environment
         self.env = env
 
+        #set meta
         self.name = name
 
         #setup params
-        self.params = epidemic_params if epidemic_params else EpidemicParameters()#TODO defaults
+        self.params = deepcopy(epidemic_params) if epidemic_params else EpidemicParameters()
 
         #event setup
         self.events = []
@@ -214,12 +219,19 @@ class Population (object):
 def absolute_to_growrate(xn1, xn0, Δ01):
     return (xn1/xn0)**(1 / Δ01) - 1
 
+def rate_relative(a, percentage):
+    '''returns the rate relativ to another rate
+    example: a = 0.1; b should be 4% of the total period
+                => a will interpretted as 96% and b will be 0.1 / 96 * 4'''
+    return a / (100 - percentage) * percentage
+
 def plot_population(populations):
     '''Plot all given populations, each with its own figure.'''
     i=2; last = len(populations)
     for population in populations:
         model.sirxd_plot(
             time=list(range(END+1)), 
+            title=population.name,
             S=population.s_class_data,
             I=population.i_class_data, 
             R=population.r_class_data, 
@@ -244,28 +256,37 @@ if __name__ == '__main__':
     pop_ger = 83.2 * 10 ** 6
     v_2019 = absolute_to_growrate(pop_ger + 778100, pop_ger, 365)
     μ_2019 = absolute_to_growrate(pop_ger + 939500, pop_ger, 365)
-    β_08 = absolute_to_growrate(100000, 1, 30)
-    δ_08 = absolute_to_growrate(9253, 1, 240)
+    β_cor = absolute_to_growrate(100000, 1, 30)
     γ_10days=1/10
-    ω_14days=1/14
-    params_ger_2019 = EpidemicParameters(β=β_08, γ=γ_10days, δ=δ_08, ωs=0, ωi=0, ωe=0, v= v_2019, μ = μ_2019)
-    
-    params_ger_II = EpidemicParameters(β = β_08/50, γ=0.03/50, δ= 0.0000004, ωs= 0.0, ωi= 0.0, ωe= 0.0, v= v_2019, μ = μ_2019)
+    ωe_14days=1/14
+    δ_08 = rate_relative(γ_10days, 9277/234853 * 100)#death rate of infection related to recover rate
+
+    params_ger_2019 = EpidemicParameters(β=β_cor, γ=γ_10days, δ=δ_08, ωs=0, ωi=0, ωe=0, v= v_2019, μ = μ_2019)    
+    params_ger_II = EpidemicParameters(β=β_cor, γ=γ_10days, δ= δ_08, ωs= 0.0, ωi= 0.0, ωe= 0.0, v= v_2019, μ = μ_2019)
     
 
     #setup populations
-    # pop_germany = Population(env, 'Deutschland', 80000000, epidemic_params= params_ger, events=EpidemicEvent('Event 1', 'env.now == 2', v=5))
-    pop_germany = Population(env, 'Deutschland',n_class_cap = pop_ger, i_class_cap=1, epidemic_params= params_ger_2019)
+    pop_germany = Population(env, 'Deutschland',\
+        n_class_cap = pop_ger, i_class_cap=1, epidemic_params= params_ger_2019)
 
-    pop_germanyII = Population(env, 'Deutschland II',n_class_cap = 83.2 * 10 ** 6, i_class_cap=1, epidemic_params= params_ger_II)
-    # pop_germany.subscribe_event(EpidemicEvent('Event 2', 'env.now == 5', v=1))
+    pop_germanyII = Population(env, 'Deutschland (mit Gegenmaßnahmen)', \
+        n_class_cap = pop_ger, i_class_cap=1, epidemic_params= params_ger_2019)
     
     #events
-    pop_germany.subscribe_event(EpidemicEvent('Lockdown', 'env.now == 50', β=pop_germany.params.β/10))
-    pop_germany.subscribe_event(EpidemicEvent('Lockdown', 'env.now == 100', β=β_08/5))
+
+    def end_lockdown(ev, population):
+        now = population.env.now
+        population.subscribe_event(EpidemicEvent('Ende Lockdown & Sensibilisierung & Quarantäne',\
+        f'env.now == {now + 40}', β=β_cor * 0.75, ωi=0.1, ωs=0.0001, ωe=ωe_14days))
+
+    pop_germanyII.subscribe_event(EpidemicEvent('Lockdown & Quarantäne', callback=end_lockdown,\
+        condition='population.i_class >= 1000000', β=pop_germany.params.β * 0.7, ωi=0.1, ωs=0.001, ωe=ωe_14days))
+    
 
     # Start simulation
+    print('Simulation started')
     env.run(until=END)
+    print('Simulation finish succesfull')
     
     #plot
     plot_population([pop_germany, pop_germanyII,])
