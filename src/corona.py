@@ -4,7 +4,7 @@ import simpy
 import sim_epidemic as model
 
 STEP = 1 #Stepwidth; interpreted as days. Adjust the rates of EpidemicParameters to this value
-END = 175 #Simulates this number of steps
+END = 175*10 #Simulates this number of steps
 
 class EpidemicParameters(object):
     '''Parameters for epidemic calculation with respect to SIRXD-model
@@ -242,6 +242,8 @@ def plot_population(populations):
             N=population.n_class_data, figure=i, last_figure=last == i-1)
         i+=1
 
+def set_β_with_R0(r0, γ):
+    return r0 * γ
 
 if __name__ == '__main__':
 
@@ -277,10 +279,10 @@ if __name__ == '__main__':
     def end_lockdown(ev, population):
         now = population.env.now
         population.subscribe_event(EpidemicEvent('Ende Lockdown & Sensibilisierung & Quarantäne',\
-        f'env.now == {now + 40}', β=β_cor * 0.75, ωi=0.1, ωs=0.0001, ωe=ωe_14days))
+        f'env.now == {now + 40}', β=β_cor * 0.75, ωi=0.1, ωs=0.0001, ωe=ωe_14days))#
 
     pop_germanyII.subscribe_event(EpidemicEvent('Lockdown & Quarantäne', callback=end_lockdown,\
-        condition='population.i_class >= 1000000', β=pop_germany.params.β * 0.7, ωi=0.1, ωs=0.001, ωe=ωe_14days))
+        condition='population.i_class >= 1000000', β=set_β_with_R0(1,pop_germanyII.params.γ), ωi=0.1, ωs=0.001, ωe=ωe_14days))#pop_germany.params.β * 0.7
     
 
     # Start simulation
